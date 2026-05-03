@@ -7,6 +7,9 @@ import SocialGraph from './SocialGraph';
 import ReactMarkdown from 'react-markdown';
 import SplashScreen from './SplashScreen'; 
 
+// --- PRODUCTION CONFIG ---
+const API_BASE_URL = 'https://empire-of-shadows.onrender.com';
+
 const getFactionColor = (faction) => {
   if (faction === 'Western') return '#00d4ff';
   if (faction === 'Eastern') return '#ff003c';
@@ -15,7 +18,6 @@ const getFactionColor = (faction) => {
 };
 
 function App() {
-  // --- STATE ---
   const [showSplash, setShowSplash] = useState(true);
   const [command, setCommand] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -27,10 +29,9 @@ function App() {
   const [innerMonologue, setInnerMonologue] = useState('');
   const [interceptType, setInterceptType] = useState('');
   const [recentLogs, setRecentLogs] = useState([
-    { time: '00:00:00', text: 'System Initialized. Shadow Network Online.' }
+    { time: '00:00:00', text: 'Shadow Network Online. Syncing with Global Command...' }
   ]);
 
-  // --- LOGGING ---
   const addLog = (text) => {
     const timeString = new Date().toLocaleTimeString('en-US', { hour12: false });
     setRecentLogs(prev => [{ time: timeString, text }, ...prev].slice(0, 6));
@@ -39,20 +40,22 @@ function App() {
   // --- API FETCHING ---
   const fetchGraph = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/graph');
+      const response = await fetch(`${API_BASE_URL}/api/graph`);
+      if (!response.ok) throw new Error("Network response was not ok");
       const data = await response.json();
       setGraphData(data);
       if (!selectedAgent && data.nodes.length > 0) {
         setSelectedAgent(data.nodes[0]);
       }
     } catch (error) { 
-      console.error("Neo4j fetch failed:", error); 
+      console.error("Neo4j fetch failed:", error);
+      addLog("ERROR: Signal lost. Retrying neural link...");
     }
   };
 
   useEffect(() => {
     fetchGraph();
-    const interval = setInterval(fetchGraph, 10000);
+    const interval = setInterval(fetchGraph, 15000); // Increased to 15s to save Render credits
     return () => clearInterval(interval);
   }, []);
 
@@ -66,7 +69,7 @@ function App() {
     if (!command || !selectedAgent) return;
     setIsSending(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/ops/whisper', {
+      const response = await fetch(`${API_BASE_URL}/ops/whisper`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -80,7 +83,10 @@ function App() {
       setInterceptType('HUMAN WHISPER'); 
       addLog(`Secret message sent to ${selectedAgent.name}`);
       setCommand(''); 
-    } catch (error) { console.error(error); }
+    } catch (error) { 
+        console.error(error); 
+        addLog("FAILURE: Whisper intercepted by local counter-intel.");
+    }
     setIsSending(false);
   };
 
@@ -88,7 +94,7 @@ function App() {
     if (!selectedAgent) return;
     setIsSending(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/ops/sabotage', {
+      const response = await fetch(`${API_BASE_URL}/ops/sabotage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ country_id: selectedAgent.id, specific_target: attackTarget })
@@ -107,9 +113,10 @@ function App() {
   };
 
   const handleGlobalReset = async () => {
+    if (!window.confirm("WARNING: This will wipe the global timeline. Proceed?")) return;
     setIsSending(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/ops/reset', { method: 'POST' });
+      const response = await fetch(`${API_BASE_URL}/ops/reset`, { method: 'POST' });
       if (response.ok) {
         setInnerMonologue(`[SYSTEM ALERT]: \n\nGlobal timeline reset initiated. Board wiped.`);
         setInterceptType('SYSTEM OVERRIDE');
@@ -127,7 +134,7 @@ function App() {
     if (isAutoRunning) {
       interval = setInterval(async () => {
         try {
-          const response = await fetch('http://127.0.0.1:8000/ops/auto', { method: 'POST' });
+          const response = await fetch(`${API_BASE_URL}/ops/auto`, { method: 'POST' });
           const data = await response.json();
           if (data.status === 'success') {
             setInnerMonologue(`[${data.target.toUpperCase()}]: \n\n${data.action_taken}`);
@@ -135,31 +142,22 @@ function App() {
             addLog(`[AUTO] ${data.source} intel intercepted regarding ${data.target}`);
           }
         } catch (error) { console.error("Auto chatter failed:", error); }
-      }, 45000); 
+      }, 60000); // Set to 60s to prevent Rate Limits on Render
     }
     return () => clearInterval(interval);
   }, [isAutoRunning]);
 
+  // --- REMAINDER OF YOUR UI CODE UNCHANGED ---
   return (
     <div className="h-screen w-screen bg-[#02050A] text-cyan-100 flex flex-col overflow-hidden relative font-sans">
-      
-      {/* SPLASH SCREEN COMPONENT */}
-      {showSplash && (
-        <SplashScreen onComplete={() => setShowSplash(false)} />
-      )}
-
-      {/* HEADER */}
+      {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
       <header className="h-14 border-b border-cyan-900/50 bg-[#030712] flex items-center justify-center px-6 z-0 shrink-0 shadow-[0_4px_20px_rgba(8,145,178,0.1)]">
           <h1 className="text-2xl font-serif font-bold tracking-[0.3em] text-cyan-400" style={{ textShadow: '0 0 15px rgba(34,211,238,0.6)'}}>
             EMPIRE OF SHADOWS
           </h1>
       </header>
-
-      {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col gap-4 p-4 overflow-hidden z-0">
         <div className="flex-1 grid grid-cols-12 gap-4 overflow-hidden">
-          
-          {/* LEFT: SHADOW AGENTS */}
           <section className="col-span-2 flex flex-col bg-[#050A15] border border-cyan-900/40 rounded-lg overflow-hidden relative shadow-[inset_0_0_20px_rgba(8,145,178,0.05)]">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent"></div>
             <div className="flex justify-between items-center px-4 py-4 border-b border-cyan-900/40 shrink-0">
@@ -180,8 +178,6 @@ function App() {
               })}
             </div>
           </section>
-
-          {/* CENTER: TACTICAL MAP */}
           <section className="col-span-8 flex flex-col bg-[#050A15] border border-cyan-900/40 rounded-lg overflow-hidden relative shadow-[0_0_30px_rgba(8,145,178,0.05)]">
             <h2 className="absolute top-4 left-5 z-10 text-[11px] text-cyan-400/80 font-mono font-bold tracking-[0.2em] uppercase pointer-events-none">
               <span className="inline-block w-2 h-2 bg-cyan-500 animate-pulse mr-2 rounded-sm"></span> GLOBAL TACTICAL VIEW
@@ -190,8 +186,6 @@ function App() {
               <SocialGraph graphData={graphData} />
             </div>
           </section>
-
-          {/* RIGHT: WHISPER CHAMBER */}
           <section className="col-span-2 flex flex-col bg-[#050A15] border border-cyan-900/40 rounded-lg overflow-hidden relative">
             <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-3xl pointer-events-none"></div>
             <div className="px-4 py-4 border-b border-cyan-900/40 shrink-0">
@@ -206,11 +200,7 @@ function App() {
             </div>
           </section>
         </div>
-
-        {/* BOTTOM SECTION: SHADOW CORNER */}
         <div className="h-[26vh] min-h-[220px] shrink-0 grid grid-cols-12 gap-4">
-          
-          {/* ACTION TOGGLES */}
           <section className="col-span-2 flex flex-col bg-[#050A15] border border-cyan-900/40 rounded-lg p-3 relative">
              <h2 className="text-[10px] text-cyan-500 mb-2 font-mono uppercase tracking-[0.2em] border-b border-cyan-900/40 pb-2">OPERATIONS</h2>
              <div className="grid grid-cols-2 gap-2 flex-1">
@@ -230,8 +220,6 @@ function App() {
                 <button onClick={handleGlobalReset} className="w-full border p-2 rounded-sm text-[9px] font-mono tracking-widest uppercase border-fuchsia-900/40 text-fuchsia-600 hover:border-fuchsia-500 hover:bg-fuchsia-900/10 flex items-center justify-center gap-2 transition-all"><ShieldAlert size={12} /> Global Reset</button>
              </div>
           </section>
-
-          {/* MASTER EXECUTION PANEL */}
           <section className="col-span-10 flex flex-col bg-[#050A15] border border-cyan-900/40 rounded-lg p-5 relative overflow-hidden">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1 bg-cyan-500/20 blur-md pointer-events-none"></div>
             <div className="flex justify-between items-end mb-4 shrink-0">
@@ -241,7 +229,6 @@ function App() {
                 <div className="text-xs text-cyan-300 font-mono">{isSending ? "Executing Protocol..." : (selectedAgent ? `Locked: ${selectedAgent.name}` : "Awaiting Selection.")}</div>
               </div>
             </div>
-
             <div className="flex gap-4 mb-4 shrink-0 h-14">
               {selectedAction === 'WHISPER' ? (
                 <div className="flex-1 relative h-full">
@@ -259,7 +246,6 @@ function App() {
                   </select>
                 </div>
               )}
-              
               <button onClick={handleMasterExecute} disabled={isSending || !selectedAgent} className="h-full bg-[#0A0515] border border-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.2)] hover:shadow-[0_0_25px_rgba(217,70,239,0.5)] hover:bg-[#120525] text-fuchsia-400 px-8 font-serif tracking-[0.15em] text-sm flex items-center justify-between gap-6 transition-all min-w-[320px] rounded-sm disabled:opacity-40">
                 <div className="flex items-center gap-3">
                   <Hexagon size={16} className="text-fuchsia-500" />
@@ -268,8 +254,6 @@ function App() {
                 <Play size={14} fill="currentColor" className="text-fuchsia-500" />
               </button>
             </div>
-
-            {/* OPERATION LEDGER */}
             <div className="flex-1 flex flex-col min-h-0">
               <h2 className="text-[9px] text-cyan-600 mb-2 font-mono tracking-widest uppercase flex items-center gap-2 shrink-0">
                 <span className="w-4 h-[1px] bg-cyan-900/50"></span> Operation Ledger <span className="flex-1 h-[1px] bg-cyan-900/50"></span>
